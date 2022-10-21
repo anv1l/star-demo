@@ -1,58 +1,54 @@
-use font_kit::family_name::FamilyName;
-use font_kit::properties::Properties;
-use font_kit::source::SystemSource;
-use minifb::{MouseMode, Scale, ScaleMode, Window, WindowOptions};
-use raqote::{
-    DrawOptions, DrawTarget, PathBuilder, Point, SolidSource, Source, StrokeStyle, Transform,
-};
-const WIDTH: usize = 400;
-const HEIGHT: usize = 400;
+mod star;
 
+use nannou::prelude::*;
+use rand::prelude::*;
+pub struct Model {
+    pub stars: Vec<star::Star>,
+}
 fn main() {
-    let mut window = Window::new(
-        "Raqote",
-        WIDTH,
-        HEIGHT,
-        WindowOptions {
-            ..WindowOptions::default()
-        },
-    )
-    .unwrap();
-    let font = SystemSource::new()
-        .select_best_match(&[FamilyName::SansSerif], &Properties::new())
-        .unwrap()
-        .load()
-        .unwrap();
+    nannou::app(model).event(event).simple_window(view).run();
+}
 
-    let size = window.get_size();
-    let mut dt = DrawTarget::new(size.0 as i32, size.1 as i32);
-    loop {
-        dt.clear(SolidSource::from_unpremultiplied_argb(
-            0xff, 0xff, 0xff, 0xff,
-        ));
-        let mut pb = PathBuilder::new();
-        if let Some(pos) = window.get_mouse_pos(MouseMode::Clamp) {
-            pb.rect(pos.0, pos.1, 100., 130.);
-            let path = pb.finish();
-            dt.fill(
-                &path,
-                &Source::Solid(SolidSource::from_unpremultiplied_argb(0xff, 0, 0xff, 0)),
-                &DrawOptions::new(),
-            );
+fn model(_app: &App) -> Model {
+    let boundary = _app.window_rect();
 
-            let pos_string = format!("{:?}", pos);
-            dt.draw_text(
-                &font,
-                36.,
-                &pos_string,
-                Point::new(0., 100.),
-                &Source::Solid(SolidSource::from_unpremultiplied_argb(0xff, 0, 0, 0)),
-                &DrawOptions::new(),
-            );
+    let mut stars: Vec<star::Star> = vec![];
 
-            window
-                .update_with_buffer(dt.get_data(), size.0, size.1)
-                .unwrap();
+    stars.resize_with(10000, || {
+        star::Star::new(boundary.w(), boundary.h(), &mut thread_rng())
+    });
+
+    Model { stars }
+}
+
+fn update_all(app: &App, model: &mut Model) {
+    let boundary = app.window_rect();
+    for star in model.stars.iter_mut() {
+        star.update(boundary.w(), boundary.h(), 0.5, 1.0, &mut thread_rng())
+    }
+}
+
+fn event(_app: &App, _model: &mut Model, _event: Event) {
+    update_all(_app, _model);
+}
+
+fn view(app: &App, _model: &Model, frame: Frame) {
+    let draw = app.draw();
+    let boundary = app.window_rect();
+    draw.background().color(BLACK);
+
+    for star in &_model.stars {
+        let percent = 1.0 - star.position.z / boundary.w();
+        let radius = star.radius * percent;
+
+        if star.position.z > 0.0 {
+            draw.rect()
+                .color(Rgba::new(207.0, 201.0, 235.0, percent * 255.0))
+                .w(radius)
+                .h(radius)
+                .x_y(star.position.x + app.mouse.x, star.position.y + app.mouse.y);
         }
     }
+
+    draw.to_frame(app, &frame).unwrap();
 }
